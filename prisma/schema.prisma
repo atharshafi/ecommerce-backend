@@ -36,6 +36,7 @@ model Product {
 
   images      ProductImage[]
   orderItems  OrderItem[]
+  cartItems   CartItem[]     // Add this relation
 
   createdAt   DateTime      @default(now())
 }
@@ -51,11 +52,28 @@ model ProductImage {
 model Order {
   id          Int          @id @default(autoincrement())
   totalAmount Float
-  status      OrderStatus @default(PENDING)
+  status      OrderStatus  @default(PENDING)
+
+  // Add this line - link order to user
+  userId      Int?         // Null for guest orders
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Customer information
+  customerName     String?
+  customerEmail    String?
+  customerPhone    String?
+  shippingAddress  String?
+  notes            String?
 
   items       OrderItem[]
 
   createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Add indexes for better performance
+  @@index([status])
+  @@index([createdAt])
+  @@index([customerEmail])
 }
 
 model OrderItem {
@@ -70,10 +88,88 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id])
 }
 
+// ADD THESE NEW MODELS
+model Cart {
+  id        String    @id @default(cuid())
+  sessionId String?   // For guest users
+   userId    Int?      @unique  // Add @unique here
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([sessionId])
+  @@index([userId])
+}
+
+model CartItem {
+  id        Int     @id @default(autoincrement())
+  cartId    String
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int     @default(1)
+
+  @@unique([cartId, productId])
+  @@index([productId])
+}
+
 enum OrderStatus {
   PENDING
   PAID
   SHIPPED
   DELIVERED
   CANCELLED
+}
+
+// Add after OrderItem model or at the end of file
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  firstName String?
+  lastName  String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  role      UserRole @default(CUSTOMER)
+  
+  addresses Address[]
+  orders    Order[]
+  cart      Cart?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([isActive])
+}
+
+model Address {
+  id          Int         @id @default(autoincrement())
+  userId      Int
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        AddressType @default(SHIPPING)
+  street      String
+  city        String
+  state       String
+  postalCode  String
+  country     String      @default("USA")
+  isDefault   Boolean     @default(false)
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId])
+  @@unique([userId, isDefault]) // Only one default address per user
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum AddressType {
+  SHIPPING
+  BILLING
 }
